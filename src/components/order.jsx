@@ -51,32 +51,89 @@ export function Order()
 
     const handleConfirmPayment = async () => {
             
-        if (!userDet?.id) {
-            alert("User or Dish data not loaded yet");
+        if(!userDet?.id){
+            alert("User data not loaded");
             return;
         }
 
         try{
-            const senOrder = await axios.post(
-                `https://foodhub-backend-u5jo.onrender.com/order/confirm-payment`,
+
+            const paymentRes = await axios.post(
+                "https://foodhub-backend-u5jo.onrender.com/order/create-payment",
                 {
-                    userId: userDet.id,
+                    userId: userDet?.id,
                     restaurantId: dishItem.restaurant.id,
-                    items: [
-                        {
-                            menuItemId: dishItem._id,
-                            itemName: dishItem.itemName,
-                            price: dishItem.price,
-                            quantity: 1,
-                        }
-                    ]
+                    items: [{
+                        menuItemId: dishItem._id,
+                        itemName: dishItem.itemName,
+                        price: dishItem.price,
+                        quantity: 1
+                    }]
                 }
             );
 
-            setOrderDet(senOrder.data);
+            const data = paymentRes.data;
+
+            const options = {
+
+                key: import.meta.env.VITE_RAZORPAY_KEY_ID,
+                amount: data.amount,
+                currency: data.currency,
+                name: "FoodHub",
+                description: "Food Order Payment",
+                order_id: data.razorpayOrderId,
+
+                handler: async function(response) {
+                    
+                    const verifyRes = await axios.post(
+                        "https://foodhub-backend-u5jo.onrender.com/order/verify-payment",
+                        {
+                            razorpayOrderId: response.razorpay_order_id,
+
+                            razorpayPaymentId: response.razorpay_payment_id,
+
+                            razorpaySignature: response.razorpay_signature,
+
+                            order: {
+                                userId: userDet.id,
+                                restaurantId: dishItem.restaurant.id,
+                                items: [
+                                    {
+                                        menuItemId: dishItem._id,
+                                        itemName: dishItem.itemName,
+                                        price: dishItem.price,
+                                        quantity: 1
+                                    }
+                                ]
+                            }
+                        }
+                    );
+
+                    setOrderDet(verifyRes.data);
+
+                    alert("Payment Successful");
+
+                },
+
+                prefill: {
+                    name: userDet.name,
+                    email: userDet.email
+                },
+
+                theme: {
+                    color: "#3399cc"
+                }
+
+            };
+
+            const razorpay = new window.Razorpay(options);
+
+            razorpay.open();
+
         }
         catch(error){
             console.error(error);
+            alert("Payment Failed");
         }
         
     };
@@ -155,7 +212,7 @@ export function Order()
                             </div>
                         </div>
 
-                        <button type="button" className="userLogin-btn" data-bs-toggle="modal" data-bs-target="#paymentModal">
+                        <button type="button" className="userLogin-btn" onClick={handleConfirmPayment}>
                             Proceed to Payment
                         </button>
                     </div>
